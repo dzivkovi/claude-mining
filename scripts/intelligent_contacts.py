@@ -661,6 +661,12 @@ Author: Daniel Zivkovic / Magma Inc.
         default=0,
         help="Limit number of conversations to process (0 = no limit, for testing)",
     )
+    parser.add_argument(
+        "--start",
+        type=int,
+        default=0,
+        help="Start from conversation N (0-indexed, after filtering). Use with --limit for ranges.",
+    )
 
     args = parser.parse_args()
 
@@ -685,10 +691,18 @@ Author: Daniel Zivkovic / Magma Inc.
             logger.warning("No conversations with potential contacts found")
             return 0
 
-        # Apply limit if specified
-        if args.limit > 0:
-            filtered_convs = filtered_convs[: args.limit]
-            logger.info(f"🔢 Limited to first {args.limit} conversations")
+        # Apply start/limit if specified (after filtering)
+        total_filtered = len(filtered_convs)
+        start_idx = args.start
+        end_idx = start_idx + args.limit if args.limit > 0 else total_filtered
+
+        if start_idx > 0 or args.limit > 0:
+            filtered_convs = filtered_convs[start_idx:end_idx]
+            actual_end = min(end_idx, total_filtered)
+            logger.info(
+                f"🔢 Processing conversations {start_idx + 1}-{actual_end} "
+                f"of {total_filtered} filtered"
+            )
 
         # Dry run mode - just show stats
         if args.dry_run:
@@ -697,7 +711,10 @@ Author: Daniel Zivkovic / Magma Inc.
             logger.info("DRY RUN - No API calls will be made")
             logger.info("=" * 50)
             logger.info(f"  Total conversations: {len(conversations)}")
+            logger.info(f"  After filtering: {total_filtered}")
             logger.info(f"  Skipped (no contacts likely): {skipped}")
+            if start_idx > 0 or args.limit > 0:
+                logger.info(f"  Range: {start_idx + 1}-{min(end_idx, total_filtered)}")
             logger.info(f"  Would process: {len(filtered_convs)}")
             logger.info(f"  Estimated API calls: {len(filtered_convs)}")
             logger.info(f"  Estimated cost: ${len(filtered_convs) * 0.15:.2f}")

@@ -23,6 +23,17 @@ from typing import Any
 
 import anthropic
 
+# Optional Gemini support
+try:
+    from google import genai
+    from google.genai import types as genai_types
+
+    GEMINI_AVAILABLE = True
+except ImportError:
+    GEMINI_AVAILABLE = False
+    genai = None
+    genai_types = None
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -31,13 +42,39 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Constants
+# Constants - Models with (provider, model_id) tuples
 MODELS = {
-    "opus": "claude-opus-4-20250514",
-    "sonnet": "claude-sonnet-4-20250514",
-    "haiku": "claude-haiku-3-5-20241022",
+    # Claude models (require ANTHROPIC_API_KEY)
+    "opus": ("claude", "claude-opus-4-20250514"),
+    "sonnet": ("claude", "claude-sonnet-4-20250514"),
+    "haiku": ("claude", "claude-haiku-3-5-20241022"),
+    # Gemini models (require GOOGLE_API_KEY or GEMINI_API_KEY)
+    # Latest Gemini 3 series (December 2025)
+    "gemini-3-flash": ("gemini", "gemini-3-flash-preview"),
+    "gemini-3-pro": ("gemini", "gemini-3-pro-preview"),
+    # Gemini 2.5 series (stable)
+    "gemini-2.5-flash": ("gemini", "gemini-2.5-flash"),
+    "gemini-2.5-pro": ("gemini", "gemini-2.5-pro"),
+    # Gemini 2.0 (legacy but cheap)
+    "gemini-2.0-flash": ("gemini", "gemini-2.0-flash"),
 }
-DEFAULT_MODEL = "opus"
+DEFAULT_MODEL = "gemini-3-flash"  # Latest & best value
+
+# Cost estimates per conversation (for dry-run) - approximate based on token pricing
+COST_PER_CONV = {
+    # Claude (expensive)
+    "opus": 0.60,
+    "sonnet": 0.15,
+    "haiku": 0.08,
+    # Gemini 3 series (preview pricing)
+    "gemini-3-flash": 0.01,
+    "gemini-3-pro": 0.05,
+    # Gemini 2.5 series
+    "gemini-2.5-flash": 0.008,
+    "gemini-2.5-pro": 0.04,
+    # Gemini 2.0
+    "gemini-2.0-flash": 0.005,
+}
 MAX_TOKENS = 4096
 MAX_RETRIES = 3
 RETRY_DELAY = 2  # seconds, will be multiplied by attempt number
@@ -83,6 +120,34 @@ CONTACT_TOOL = {
         "required": ["name", "importance"],
     },
 }
+
+
+def get_gemini_contact_tool():
+    """Create Gemini tool definition (created at runtime to avoid import errors)."""
+    if not GEMINI_AVAILABLE:
+        return None
+    return genai_types.Tool(
+        function_declarations=[
+            {
+                "name": "report_contact",
+                "description": "Report a single person mentioned in the conversation. Call this for each person you identify.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string", "description": "Person's full name if available"},
+                        "relationship": {"type": "string", "description": "How they relate to the author"},
+                        "organization": {"type": "string", "description": "Company or institution"},
+                        "context": {"type": "string", "description": "Brief description of how/why mentioned"},
+                        "importance": {"type": "string", "enum": ["high", "medium", "low"]},
+                        "sentiment": {"type": "string", "enum": ["positive", "neutral", "complicated", "negative"]},
+                        "contact_info": {"type": "string", "description": "Any contact details mentioned"},
+                    },
+                    "required": ["name", "importance"],
+                },
+            }
+        ]
+    )
+
 
 CATEGORIES = [
     "Family",
@@ -225,7 +290,33 @@ def filter_conversations(
     return filtered, skipped
 
 
-def extract_contacts_from_conversation(
+def get_provider_and_client(model_key: str) -> tuple[str, Any, str]:
+    """
+    Detect provider and initialize appropriate client.
+    Returns (provider_name, client_instance, model_id).
+    """
+    provider, model_id = MODELS[model_key]
+
+    if provider == "claude":
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            raise ValueError("ANTHROPIC_API_KEY environment variable required for Claude models")
+        return "claude", anthropic.Anthropic(api_key=api_key), model_id
+
+    elif provider == "gemini":
+        if not GEMINI_AVAILABLE:
+            raise ValueError("Gemini models require 'google-genai' package. Install with: pip install google-genai")
+        api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+        if not api_key:
+            raise ValueError("GEMINI_API_KEY or GOOGLE_API_KEY environment variable required for Gemini models")
+        client = genai.Client(api_key=api_key)
+        return "gemini", client, model_id
+
+    else:
+        raise ValueError(f"Unknown provider: {provider}")
+
+
+def extract_contacts_claude(
     client: anthropic.Anthropic,
     conv_text: str,
     conv_id: str,
@@ -234,9 +325,8 @@ def extract_contacts_from_conversation(
     model: str,
 ) -> tuple[list[dict[str, Any]], str | None]:
     """
-    Extract contacts from ONE conversation using tool calling.
+    Extract contacts from ONE conversation using Claude tool calling.
     Returns (contacts_list, raw_response_for_debugging).
-    Tool calling eliminates JSON parsing failures.
     """
     prompt = EXTRACTION_PROMPT + conv_text
 
@@ -292,6 +382,100 @@ def extract_contacts_from_conversation(
                 return [], f"API Error: {e}"
 
     return [], "Max retries exceeded"
+
+
+def extract_contacts_gemini(
+    client,  # google.genai.Client
+    conv_text: str,
+    conv_id: str,
+    conv_num: int,
+    total_convs: int,
+    model: str,
+) -> tuple[list[dict[str, Any]], str | None]:
+    """
+    Extract contacts from ONE conversation using Gemini function calling.
+    Returns (contacts_list, raw_response_for_debugging).
+    """
+    prompt = EXTRACTION_PROMPT + conv_text
+    tool = get_gemini_contact_tool()
+    config = genai_types.GenerateContentConfig(tools=[tool])
+
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            if attempt == 1:
+                logger.info(f"[{conv_num}/{total_convs}] Processing {conv_id[:8]}...")
+            else:
+                logger.info(f"  Retry {attempt}/{MAX_RETRIES}...")
+
+            response = client.models.generate_content(
+                model=model,
+                contents=prompt,
+                config=config,
+            )
+
+            # Extract contacts from function calls
+            contacts = []
+            raw_response_parts = []
+
+            # Handle response - Gemini structure differs from Claude
+            if response.candidates and response.candidates[0].content:
+                for part in response.candidates[0].content.parts:
+                    if hasattr(part, "function_call") and part.function_call:
+                        if part.function_call.name == "report_contact":
+                            contact = dict(part.function_call.args)
+                            contact["source_conversation"] = conv_id
+                            contacts.append(contact)
+                            raw_response_parts.append(json.dumps(dict(part.function_call.args)))
+                    elif hasattr(part, "text") and part.text:
+                        raw_response_parts.append(part.text)
+
+            raw_response = "\n".join(raw_response_parts)
+
+            if contacts:
+                logger.info(f"  ✓ Found {len(contacts)} contact(s)")
+            else:
+                logger.debug(f"  No contacts in this conversation")
+
+            return contacts, raw_response
+
+        except Exception as e:
+            error_msg = str(e)
+            if "rate" in error_msg.lower() or "quota" in error_msg.lower():
+                logger.warning(f"  Rate limited: {e}")
+                delay = RETRY_DELAY * attempt * 2
+                logger.info(f"    Waiting {delay}s...")
+                time.sleep(delay)
+            else:
+                logger.error(f"  API error: {e}")
+                if attempt < MAX_RETRIES:
+                    delay = RETRY_DELAY * attempt
+                    logger.info(f"    Waiting {delay}s...")
+                    time.sleep(delay)
+                else:
+                    return [], f"API Error: {e}"
+
+    return [], "Max retries exceeded"
+
+
+def extract_contacts_from_conversation(
+    provider: str,
+    client,
+    conv_text: str,
+    conv_id: str,
+    conv_num: int,
+    total_convs: int,
+    model: str,
+) -> tuple[list[dict[str, Any]], str | None]:
+    """
+    Unified dispatcher - routes to appropriate provider.
+    Returns (contacts_list, raw_response_for_debugging).
+    """
+    if provider == "claude":
+        return extract_contacts_claude(client, conv_text, conv_id, conv_num, total_convs, model)
+    elif provider == "gemini":
+        return extract_contacts_gemini(client, conv_text, conv_id, conv_num, total_convs, model)
+    else:
+        raise ValueError(f"Unknown provider: {provider}")
 
 
 def save_failed_response(
@@ -678,20 +862,18 @@ Author: Daniel Zivkovic / Magma Inc.
         "--model",
         choices=list(MODELS.keys()),
         default=DEFAULT_MODEL,
-        help=f"Model to use: opus (best), sonnet (balanced), haiku (cheap). Default: {DEFAULT_MODEL}",
+        help=(
+            f"Model to use. Claude: opus, sonnet, haiku. "
+            f"Gemini 3: gemini-3-flash (default), gemini-3-pro. "
+            f"Gemini 2.5: gemini-2.5-flash, gemini-2.5-pro. "
+            f"Gemini 2.0: gemini-2.0-flash. Default: {DEFAULT_MODEL}"
+        ),
     )
 
     args = parser.parse_args()
 
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
-
-    # Check for API key (not needed for dry-run)
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key and not args.dry_run:
-        logger.error("ANTHROPIC_API_KEY environment variable is required")
-        logger.error("Set it with: export ANTHROPIC_API_KEY='your-key-here'")
-        return 1
 
     try:
         # Load conversations
@@ -719,10 +901,15 @@ Author: Daniel Zivkovic / Magma Inc.
 
         # Dry run mode - just show stats
         if args.dry_run:
+            provider, model_id = MODELS[args.model]
+            cost_per_conv = COST_PER_CONV.get(args.model, 0.15)
+            estimated_cost = len(filtered_convs) * cost_per_conv
+
             logger.info("")
             logger.info("=" * 50)
             logger.info("DRY RUN - No API calls will be made")
             logger.info("=" * 50)
+            logger.info(f"  Model: {args.model} ({provider})")
             logger.info(f"  Total conversations: {len(conversations)}")
             logger.info(f"  After filtering: {total_filtered}")
             logger.info(f"  Skipped (no contacts likely): {skipped}")
@@ -730,14 +917,13 @@ Author: Daniel Zivkovic / Magma Inc.
                 logger.info(f"  Range: {start_idx + 1}-{min(end_idx, total_filtered)}")
             logger.info(f"  Would process: {len(filtered_convs)}")
             logger.info(f"  Estimated API calls: {len(filtered_convs)}")
-            logger.info(f"  Estimated cost: ${len(filtered_convs) * 0.15:.2f}")
+            logger.info(f"  Estimated cost: ${estimated_cost:.2f}")
             logger.info("=" * 50)
             return 0
 
-        # Initialize client and resolve model
-        client = anthropic.Anthropic(api_key=api_key)
-        model_id = MODELS[args.model]
-        logger.info(f"🤖 Using model: {args.model} ({model_id})")
+        # Initialize client based on model provider
+        provider, client, model_id = get_provider_and_client(args.model)
+        logger.info(f"🤖 Using model: {args.model} ({provider}: {model_id})")
 
         # Setup paths
         output_base = args.output.rstrip(".json").rstrip(".txt")
@@ -781,7 +967,7 @@ Author: Daniel Zivkovic / Magma Inc.
 
             # Extract contacts using tool calling
             contacts, raw_response = extract_contacts_from_conversation(
-                client, conv_text, conv_id, i, total, model_id
+                provider, client, conv_text, conv_id, i, total, model_id
             )
 
             if contacts:
@@ -848,6 +1034,10 @@ Author: Daniel Zivkovic / Magma Inc.
         return 1
     except json.JSONDecodeError as e:
         logger.error(f"Invalid JSON in input file: {e}")
+        return 1
+    except ValueError as e:
+        # Handles missing API keys from get_provider_and_client
+        logger.error(str(e))
         return 1
     except anthropic.AuthenticationError:
         logger.error("Invalid ANTHROPIC_API_KEY - please check your API key")

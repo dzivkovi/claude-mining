@@ -4,196 +4,151 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**claude-mining** is an LLM-powered tool for extracting insights from Claude conversation history exports. The core innovation is using Claude API to intelligently understand relationships, context, and sentiment—not just pattern matching with regex.
+**claude-mining** extracts contacts and insights from Claude conversation history exports using LLM APIs. Supports both **Gemini** and **Claude** models via a unified CLI.
 
-### Hybrid Approach
-This project combines **friendly, approachable documentation** with **professional code quality**:
-- Type hints throughout for better IDE support
-- Structured logging with emoji-enhanced messages
-- Comprehensive error handling
-- Argparse CLI with helpful flags
-- Community-friendly tone with privacy-first design
+### Critical Cost Warning
 
-### Key Privacy Constraint
-This repo contains **scripts only**. User export data stays in private locations (Google Drive, local folders) and must **NEVER** be committed. The [.gitignore](.gitignore) file enforces this with patterns blocking `*.json`, `*export*`, output files, and data directories.
+**API costs vary dramatically by model.** For 740 conversations:
+
+| Model | Cost | Contacts Found | Recommendation |
+|-------|------|----------------|----------------|
+| Gemini 3 Flash | ~$7 | 58 | **Default - best value** |
+| Claude Opus | ~$444 | 45 | Expensive, fewer results |
+
+Gemini excels at needle-in-haystack tasks (finding scattered mentions). Always run `--dry-run` first to see cost estimates.
+
+### Privacy Constraint
+
+Scripts only - user data stays private. The `.gitignore` blocks `*.json`, `*export*`, output files, and `private/` directories. **NEVER commit user data.**
 
 ## Development Commands
 
 ### Setup
-```bash
-# Install dependencies
-pip install anthropic --break-system-packages
-
-# Set API key (required for intelligent extraction)
-export ANTHROPIC_API_KEY="your-key-from-console.anthropic.com"
-
-# Quick setup script
-./setup.sh
-```
-
-### Running Scripts
 
 ```bash
-# Main intelligent extraction (LLM-powered)
-python scripts/intelligent_contacts.py ~/path/to/claude_export.json
+# Gemini (recommended)
+pip install google-genai
+export GOOGLE_API_KEY="your-key"
 
-# With custom output path
-python scripts/intelligent_contacts.py ~/path/to/export.json -o my_contacts
-
-# With custom batch size (for very large exports)
-python scripts/intelligent_contacts.py ~/path/to/export.json --batch-size 5
-
-# Verbose mode for detailed logging
-python scripts/intelligent_contacts.py ~/path/to/export.json -v
-
-# Fallback regex-based extraction (no API key needed)
-python scripts/holiday_contacts.py ~/path/to/export.json
+# Claude (optional)
+pip install anthropic
+export ANTHROPIC_API_KEY="your-key"
 ```
 
-### Testing
-No formal test suite exists. Test scripts manually with sample exports.
+### Running Extraction
+
+```bash
+# Preview costs (no API calls)
+python scripts/intelligent_contacts.py path/to/export.json --dry-run
+
+# Full extraction with Gemini 3 Flash (default)
+python scripts/intelligent_contacts.py path/to/export.json -o output_name
+
+# Test on subset first
+python scripts/intelligent_contacts.py path/to/export.json --limit 10
+
+# Specific range
+python scripts/intelligent_contacts.py path/to/export.json --start 50 --limit 10
+
+# Use Claude Opus instead
+python scripts/intelligent_contacts.py path/to/export.json -m opus
+```
+
+### Available Models
+
+```
+Gemini: gemini-3-flash (default), gemini-3-pro, gemini-2.5-flash, gemini-2.5-pro, gemini-2.0-flash
+Claude: opus, sonnet, haiku
+```
 
 ## Architecture
 
-### Core Processing Flow
+### Multi-Provider Design
 
-1. **Load Export** ([common.py](scripts/common.py))
-   - Handles multiple Claude export formats (list, dict with 'conversations' or 'chats')
-   - Normalizes structure to consistent format
-   - Export structure: `{conversations: [{uuid, title, messages: []}]}`
-
-2. **Chunk Conversations** ([intelligent_contacts.py](scripts/intelligent_contacts.py:84-93))
-   - Groups 10-15 conversations per chunk to stay within API limits
-   - Each chunk sent to Claude API for parallel processing
-
-3. **Extract with LLM** ([intelligent_contacts.py](scripts/intelligent_contacts.py:96-183))
-   - Sends conversation text to Claude API with structured prompt
-   - Prompt asks for: name, relationship, organization, context, importance, sentiment, contact_info
-   - Returns JSON with people array
-
-4. **Merge & Deduplicate** ([intelligent_contacts.py](scripts/intelligent_contacts.py:185-221))
-   - Combines results from all chunks
-   - Uses normalized name matching (`name.lower().replace('.', '')`)
-   - Merges data: keeps most detailed info, upgrades importance if higher found
-
-5. **Categorize** ([intelligent_contacts.py](scripts/intelligent_contacts.py:224-248))
-   - Groups by relationship keywords: Family, Work Colleagues, Recruiters, Clients, etc.
-   - Uses keyword matching in relationship field
-
-6. **Generate Report** ([intelligent_contacts.py](scripts/intelligent_contacts.py:251-331))
-   - Human-readable text report with categories
-   - JSON file with structured data
-   - Holiday greeting checklist (high + medium importance)
-
-### Shared Utilities ([common.py](scripts/common.py))
-
-**Export Handling:**
-- `load_claude_export()`: Normalizes different export formats
-- `get_conversations()`, `get_messages()`, `get_message_content()`: Extract data
-- Message content can be string OR array of content blocks (handle both)
-
-**Claude API:**
-- `get_anthropic_client()`: Initialize client if API key exists
-- `call_claude()`: Wrapper with error handling
-- Default model: `claude-sonnet-4-20250514`
-
-**Regex Patterns:**
-- `PATTERNS` dict: greeting_name, email, url, phone, etc.
-- `FALSE_POSITIVE_NAMES`: Common words to filter (days, months, companies)
-- Used by fallback regex script, not main intelligent extraction
-
-### Message Content Structure
-
-Claude exports have two content formats:
+The script uses a provider abstraction pattern:
 
 ```python
-# Simple string
-message['content'] = "Hello, how are you?"
+MODELS = {
+    "gemini-3-flash": ("gemini", "gemini-3-flash-preview"),
+    "opus": ("claude", "claude-opus-4-20250514"),
+    # ...
+}
 
-# Content blocks (code, text, etc.)
-message['content'] = [
-    {"type": "text", "text": "Here's the code:"},
-    {"type": "code", "language": "python", "code": "print('hello')"}
-]
+# Provider detection
+provider, client, model_id = get_provider_and_client(args.model)
+
+# Unified dispatcher
+contacts = extract_contacts_from_conversation(provider, client, text, ...)
 ```
 
-Always use `get_message_content()` helper to handle both.
+Each provider has its own extraction function (`extract_contacts_gemini`, `extract_contacts_claude`) but returns the same format.
 
-### API Usage Pattern
+### Tool/Function Calling
 
-The intelligent extraction uses chunking to avoid context limits:
+Uses structured tool calling (not JSON parsing) for zero data loss:
+
+- **Claude**: `tools=[CONTACT_TOOL]` with `block.type == "tool_use"`
+- **Gemini**: `genai_types.Tool(function_declarations=[...])` with `part.function_call`
+
+Each contact is a separate tool call - if one fails, others succeed.
+
+### Processing Flow
+
+1. **Load** - `load_claude_export()` normalizes export formats
+2. **Filter** - Skip conversations unlikely to contain contacts (regex pre-check)
+3. **Extract** - One conversation per API call using tool calling
+4. **Checkpoint** - Save progress after each conversation (resume on interrupt)
+5. **Deduplicate** - Merge by normalized name
+6. **Categorize** - Group by relationship keywords
+7. **Output** - `.txt` (human-readable) + `.json` (structured)
+
+### Key Files
+
+- `scripts/intelligent_contacts.py` - Main extraction script with multi-provider support
+- `scripts/common.py` - Shared utilities for loading exports
+- `scripts/holiday_contacts.py` - Regex fallback (no API needed)
+
+### Adding New Providers
+
+To add a new LLM provider:
+
+1. Add entry to `MODELS` dict with `(provider_name, model_id)` tuple
+2. Add cost estimate to `COST_PER_CONV` dict
+3. Create `extract_contacts_{provider}()` function matching signature
+4. Add case to `get_provider_and_client()` for client initialization
+5. Add case to `extract_contacts_from_conversation()` dispatcher
+
+### Gemini Import Pattern
+
+Gemini is an optional dependency:
 
 ```python
-# Process 10-15 conversations at once
-chunks = chunk_conversations(conversations, chunk_size=10)
-
-# Each chunk analyzed independently
-for chunk in chunks:
-    result = analyze_chunk_with_claude(client, chunk, user_context)
-    all_results.append(result)
-
-# Then merge to deduplicate
-all_people = merge_people(all_results)
+try:
+    from google import genai
+    from google.genai import types as genai_types
+    GEMINI_AVAILABLE = True
+except ImportError:
+    GEMINI_AVAILABLE = False
 ```
 
-This allows processing thousands of conversations without hitting token limits.
+Check `GEMINI_AVAILABLE` before using Gemini-specific code.
 
-## Adding New Scripts
+## Output Files
 
-When creating a new mining script (e.g., `project_summary.py`, `knowledge_graph.py`):
+The script generates two files per run:
 
-1. Import utilities from `common.py`:
-   ```python
-   from common import (
-       load_claude_export, get_conversations, get_messages,
-       get_message_content, get_anthropic_client, call_claude
-   )
-   ```
+- `{output}.txt` - Human-readable report with categories, holiday checklist
+- `{output}.json` - Structured data for CRM import/automation
 
-2. Follow the established pattern:
-   - Load export → Chunk → Process with LLM → Merge → Generate report
-   - Save both `.txt` (human-readable) and `.json` (structured data)
-   - Use base filename from input: `{input_stem}_output.txt`
+Both are generated by `write_report()` and `write_json()` functions.
 
-3. Handle API key gracefully:
-   ```python
-   api_key = os.environ.get('ANTHROPIC_API_KEY')
-   if not api_key:
-       print("ERROR: Set ANTHROPIC_API_KEY for AI extraction")
-       sys.exit(1)
-   ```
+## Checkpoint/Resume
 
-4. Add to [README.md](README.md) table of use cases
+Progress saves to `{output}.checkpoint.json` after each conversation. On interrupt:
 
-5. **NEVER** create example data files with real export data—use sanitized examples only in [examples/](examples/)
-
-## Security & Privacy
-
-**Critical Rules:**
-- NEVER commit files with user data (exports, outputs, reports)
-- NEVER modify [.gitignore](.gitignore) to allow data files
-- NEVER create test files with real conversation data
-- When adding features, preserve the privacy-first design
-
-**Protected Patterns in .gitignore:**
-- `*.json` (except package.json, tsconfig.json)
-- `*export*`, `*Export*`, `*EXPORT*`
-- `*_contacts.*`, `*_report.*`, `*_summary.*`
-- `data/`, `exports/`, `private/`, `personal/`
-
-## File Organization
-
-```
-scripts/
-├── common.py               # Shared utilities - USE THIS
-├── intelligent_contacts.py # Main LLM-powered extraction
-└── holiday_contacts.py     # Regex fallback (no API)
-
-docs/
-└── data_format.md         # Claude export structure reference
-
-examples/
-└── sample_output.txt      # Sanitized example output only
+```bash
+# Resume from where you left off
+python scripts/intelligent_contacts.py path/to/export.json -o same_output_name
 ```
 
-Keep scripts in `scripts/`, documentation in `docs/`, sanitized examples in `examples/`.
+The checkpoint contains `processed_ids` and `contacts` arrays.

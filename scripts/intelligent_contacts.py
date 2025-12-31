@@ -32,7 +32,12 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Constants
-MODEL = "claude-sonnet-4-20250514"
+MODELS = {
+    "opus": "claude-opus-4-20250514",
+    "sonnet": "claude-sonnet-4-20250514",
+    "haiku": "claude-haiku-3-5-20241022",
+}
+DEFAULT_MODEL = "opus"
 MAX_TOKENS = 4096
 MAX_RETRIES = 3
 RETRY_DELAY = 2  # seconds, will be multiplied by attempt number
@@ -226,6 +231,7 @@ def extract_contacts_from_conversation(
     conv_id: str,
     conv_num: int,
     total_convs: int,
+    model: str,
 ) -> tuple[list[dict[str, Any]], str | None]:
     """
     Extract contacts from ONE conversation using tool calling.
@@ -242,7 +248,7 @@ def extract_contacts_from_conversation(
                 logger.info(f"  Retry {attempt}/{MAX_RETRIES}...")
 
             response = client.messages.create(
-                model=MODEL,
+                model=model,
                 max_tokens=MAX_TOKENS,
                 tools=[CONTACT_TOOL],
                 messages=[{"role": "user", "content": prompt}],
@@ -667,6 +673,13 @@ Author: Daniel Zivkovic / Magma Inc.
         default=0,
         help="Start from conversation N (0-indexed, after filtering). Use with --limit for ranges.",
     )
+    parser.add_argument(
+        "-m",
+        "--model",
+        choices=list(MODELS.keys()),
+        default=DEFAULT_MODEL,
+        help=f"Model to use: opus (best), sonnet (balanced), haiku (cheap). Default: {DEFAULT_MODEL}",
+    )
 
     args = parser.parse_args()
 
@@ -721,8 +734,10 @@ Author: Daniel Zivkovic / Magma Inc.
             logger.info("=" * 50)
             return 0
 
-        # Initialize client
+        # Initialize client and resolve model
         client = anthropic.Anthropic(api_key=api_key)
+        model_id = MODELS[args.model]
+        logger.info(f"🤖 Using model: {args.model} ({model_id})")
 
         # Setup paths
         output_base = args.output.rstrip(".json").rstrip(".txt")
@@ -766,7 +781,7 @@ Author: Daniel Zivkovic / Magma Inc.
 
             # Extract contacts using tool calling
             contacts, raw_response = extract_contacts_from_conversation(
-                client, conv_text, conv_id, i, total
+                client, conv_text, conv_id, i, total, model_id
             )
 
             if contacts:

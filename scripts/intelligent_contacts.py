@@ -72,7 +72,7 @@ CONTACT_TOOL = {
             },
             "contact_info": {
                 "type": "string",
-                "description": "Exact email address, phone number, or LinkedIn URL if mentioned (not descriptions like 'has LinkedIn' - only actual values)",
+                "description": "Any email, phone, LinkedIn, or other contact details mentioned",
             },
         },
         "required": ["name", "importance"],

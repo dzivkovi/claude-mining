@@ -1,0 +1,127 @@
+============================================================
+🎄 INTELLIGENT CONTACT EXTRACTION REPORT 🎄
+Generated: 2025-12-30 15:42
+Total contacts found: 23
+============================================================
+
+This report was generated using Claude AI to intelligently
+understand relationships and context from your conversations.
+
+----------------------------------------------------------------------
+## SUMMARY BY IMPORTANCE
+----------------------------------------------------------------------
+  ⭐ High importance: 8
+  📌 Medium importance: 10
+  📎 Low importance: 5
+
+----------------------------------------------------------------------
+## Work Colleagues (8)
+----------------------------------------------------------------------
+
+  • Alexandra Chen (TechVentures Inc) ⭐
+    Relationship: senior developer
+    Context: Collaborated on microservices architecture migration
+    Importance: HIGH
+    Sentiment: positive (+)
+    Contact: alex.chen@techventures.example
+  ----------------------------------------
+
+  • Michael Rodriguez (DataFlow Systems)
+    Relationship: project manager
+    Organization: DataFlow Systems
+    Context: Regular project syncs and planning meetings
+    Importance: MEDIUM
+    Sentiment: positive (+)
+  ----------------------------------------
+
+  • Rebecca Thompson (CloudCore Technologies)
+    Relationship: technical lead
+    Context: Cross-team API design discussions
+    Importance: MEDIUM
+    Sentiment: neutral (o)
+  ----------------------------------------
+
+----------------------------------------------------------------------
+## Family (4)
+----------------------------------------------------------------------
+
+  • Mom ⭐
+    Relationship: mother
+    Importance: HIGH
+    Sentiment: positive (+)
+  ----------------------------------------
+
+  • Jamie
+    Relationship: younger sibling
+    Context: Planning family reunion and coordinating schedules
+    Importance: HIGH
+    Sentiment: positive (+)
+  ----------------------------------------
+
+----------------------------------------------------------------------
+## Professional Network (6)
+----------------------------------------------------------------------
+
+  • Dr. Sarah Williams ⭐
+    Relationship: mentor
+    Context: Career guidance and technical discussions
+    Importance: HIGH
+    Sentiment: positive (+)
+  ----------------------------------------
+
+  • David Park (StartupHub)
+    Relationship: meetup organizer
+    Context: Met at tech conference, occasional coffee chats
+    Importance: MEDIUM
+    Sentiment: neutral (o)
+  ----------------------------------------
+
+----------------------------------------------------------------------
+## Recruiters (3)
+----------------------------------------------------------------------
+
+  • Jennifer Walsh (TalentSearch Partners)
+    Relationship: technical recruiter
+    Context: Reached out about cloud infrastructure role
+    Importance: MEDIUM
+    Sentiment: neutral (o)
+    Contact: jwalsh@talentsearch.example
+  ----------------------------------------
+
+  • Robert Martinez (StaffingSolutions Inc)
+    Relationship: recruiter
+    Context: Initial screening call, role didn't match expectations
+    Importance: LOW
+    Sentiment: neutral (o)
+  ----------------------------------------
+
+----------------------------------------------------------------------
+## Friends & Neighbors (2)
+----------------------------------------------------------------------
+
+  • Chris Anderson
+    Relationship: neighbor
+    Context: Occasional weekend BBQs and lawn care tips
+    Importance: MEDIUM
+    Sentiment: positive (+)
+  ----------------------------------------
+
+============================================================
+## 🎄 HOLIDAY GREETING LIST (High + Medium)
+============================================================
+  ☐ Alexandra Chen - TechVentures Inc
+  ☐ Mom
+  ☐ Jamie
+  ☐ Dr. Sarah Williams
+  ☐ Michael Rodriguez - DataFlow Systems
+  ☐ Rebecca Thompson - CloudCore Technologies
+  ☐ David Park - StartupHub
+  ☐ Jennifer Walsh - TalentSearch Partners
+  ☐ Chris Anderson
+
+💡 Review and add anyone you remember!
+============================================================
+
+NOTE: This example uses obviously fake data. Your actual output
+will contain contacts intelligently extracted from YOUR conversations
+with accurate relationship context and sentiment analysis.

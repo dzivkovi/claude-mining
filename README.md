@@ -10,10 +10,10 @@
 
 | Script | Purpose | Method |
 |--------|---------|--------|
-| `intelligent_contacts.py` | Extract & classify people for holiday greetings | **Multi-LLM** 🧠 |
-| `holiday_contacts.py` | Basic name extraction (fallback) | Regex |
-| `project_summary.py` | Summarize what you worked on (coming soon) | LLM API |
-| `knowledge_graph.py` | Build a graph of people & topics (coming soon) | LLM API |
+| `intelligent_contacts.py` | Extract & classify people from conversations | **Multi-LLM** (Gemini/Claude) 🧠 |
+| `deduplicate_contacts.py` | Entity resolution & contact cleanup | Fuzzy matching + Human review |
+
+See [ROADMAP.md](ROADMAP.md) for planned features and research.
 
 ## 📊 Model Comparison (December 2025)
 
@@ -52,7 +52,7 @@ This task requires scanning large amounts of text to find scattered mentions of 
 
 **Regex approach (dumb):**
 ```
-Found: "Pat", "Uma", "Mir"
+Found: "Alex", "Rob", "Sarah"
 ```
 
 **LLM approach (intelligent):**

@@ -2,6 +2,20 @@
 """
 Holiday Contacts Extractor for Claude Export Data
 ==================================================
+
+DEPRECATED (December 2025)
+--------------------------
+This regex-based fallback script is no longer recommended.
+Use `intelligent_contacts.py` instead, which supports:
+- Multi-provider LLM extraction (Gemini/Claude)
+- Tool/function calling for zero data loss
+- Gemini 3 Flash: ~$5 for 740 conversations (60x cheaper than Claude)
+
+See README.md and ROADMAP.md for current project status.
+
+---
+
+Original Description:
 Extracts names of people mentioned in your Claude conversations
 to help build a holiday greetings list.
 
@@ -13,7 +27,7 @@ Usage:
 
 Requirements:
     pip install anthropic --break-system-packages
-    
+
     Set your API key:
     export ANTHROPIC_API_KEY="your-key-here"
 """

@@ -152,3 +152,22 @@ python scripts/intelligent_contacts.py path/to/export.json -o same_output_name
 ```
 
 The checkpoint contains `processed_ids` and `contacts` arrays.
+
+## Documentation Philosophy
+
+When documenting decisions or changes:
+
+| Document | Purpose | Content |
+| -------- | ------- | ------- |
+| **README.md** | User-facing | How to use (commands, examples) |
+| **CLAUDE.md** | AI-facing | How to modify (architecture, patterns) |
+| **docs/adr/** | Decision-facing | WHY we chose this (alternatives, trade-offs) |
+| **ROADMAP.md** | Future-facing | What's planned (ideas, not commitments) |
+
+**Prefer ADRs** over bloating README when documenting:
+
+- Algorithm choices (why Jaro-Winkler, not SBERT?)
+- Architecture decisions (why tool calling, not JSON parsing?)
+- Trade-offs (why human-in-the-loop, not full automation?)
+
+ADRs are permanent records. README should stay scannable.

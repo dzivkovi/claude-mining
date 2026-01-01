@@ -16,44 +16,23 @@
 
 ---
 
-## In Progress
+### Entity Resolution & Deduplication (January 2026)
 
-### Entity Resolution & Deduplication
+**Problem**: Raw extraction produces duplicates (name variants, celebrities, self-references) and relationship field explosion.
 
-**Problem**: Raw extraction produces duplicates and quality issues:
-- Name variants: "Daniel" vs "Daniel Z." vs "Daniel Zivkovic" (same person)
-- Relationship explosion: 100+ concatenated values per contact
-- Celebrity contamination: "Gordon Ramsay" mixed with real contacts
-- Category errors: Business contacts in "Family"
+**Solution**: Fuzzy matching (Jaro-Winkler) + Human-in-the-loop review.
 
-**Research Completed**: Evaluated 5 approaches for this dataset:
+**Results** (1052 contacts):
 
-| Approach | Suitability | Cost | Why/Why Not |
-|----------|-------------|------|-------------|
-| **Fuzzy Matching (RapidFuzz)** | ⭐⭐⭐⭐⭐ | $0 | Handles name variants, typos, nicknames |
-| Embedding Similarity (SBERT) | ⭐⭐⭐⭐ | $0 | Adds semantic context |
-| Graph Transitive Closure | ⭐⭐⭐ | $0 | Auto-clusters after human confirms pairs |
-| Dedupe Library (ML) | ⭐⭐⭐ | $0 | Overkill for ~300 contacts |
-| LLM-based Resolution | ⭐⭐ | $5-50 | Expensive, non-deterministic |
-
-**Selected Approach**: Fuzzy (Jaro-Winkler) + Human Review
-
-- **Phase 1**: Pre-filter celebrities and exact URL matches
-- **Phase 2**: Fuzzy matching at 0.88 threshold for candidate pairs
-- **Phase 3**: CLI presents candidates: `[M]erge [S]kip [Q]uit`
-- **Phase 4**: Relationship cleanup (dedupe, limit to top 5)
-- **Phase 5**: Category validation (rule-based correction)
+- 8 celebrity references removed
+- 9 self-references removed
+- 63 category fixes applied
+- Relationship fields: 4764 → 219 chars max
+- 262 fuzzy candidates identified for human review
 
 **Deliverable**: `scripts/deduplicate_contacts.py`
 
-**Expected Results**:
-
-| Metric | Before | After |
-|--------|--------|-------|
-| Total contacts | ~300 | ~180-200 |
-| Duplicate clusters | 50-80 | 0 (merged) |
-| Celebrity false positives | 10-15 | 0 (removed) |
-| Relationship field | 100+ items | ≤5 items |
+See [ADR-0001](docs/adr/0001-entity-resolution-approach.md) for decision rationale, alternatives considered, and "why we stopped here."
 
 ---
 

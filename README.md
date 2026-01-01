@@ -117,28 +117,68 @@ python scripts/intelligent_contacts.py ~/GoogleDrive/claude_export.json -m opus
 python scripts/intelligent_contacts.py ~/GoogleDrive/claude_export.json --limit 10
 ```
 
-### 5. Review Output
+### 5. Deduplicate & Clean Contacts
+
+After extraction, clean up duplicates and relationship field clutter:
+
+```bash
+# Install fuzzy matching library
+pip install rapidfuzz
+
+# Dry run - preview what will be merged (no changes)
+python scripts/deduplicate_contacts.py contacts.json --dry-run --remove-celebrities --remove-self
+
+# Interactive mode - review each merge candidate
+python scripts/deduplicate_contacts.py contacts.json --remove-celebrities --remove-self
+
+# Auto-merge high confidence (>0.97), human review for lower scores
+python scripts/deduplicate_contacts.py contacts.json --auto-merge 0.97 --remove-celebrities --remove-self
+```
+
+**What it does:**
+
+- Removes celebrity references (Gordon Ramsay, Elon Musk, etc.)
+- Removes self-references (your own name as "author")
+- Merges duplicates: "Sarah" + "Sara" + "Sarah Z." → one contact
+- Cleans relationship fields: 100+ concatenated roles → top 5
+- Fixes category errors (business contacts in "Family")
+
+### 6. Review Output
 
 ```
 ✅ Report saved: claude_export_contacts_report.txt
 ✅ JSON saved: claude_export_contacts.json
 ```
 
+## 👥 For Other Users
+
+The `--remove-self` feature has defaults for the original author's name. Override with your own:
+
+```bash
+python scripts/deduplicate_contacts.py contacts.json \
+  --user-name "YourFirstName" \
+  --user-last-name "YourLastName" \
+  --remove-self
+```
+
+All other features work without modification.
+
 ## 📁 Project Structure
 
 ```
 claude-mining/
 ├── README.md                    # You are here
+├── ROADMAP.md                   # Planned features and research
 ├── .gitignore                   # Protects your data from commits
-├── setup.sh                     # Quick setup script
 ├── scripts/
-│   ├── intelligent_contacts.py  # 🧠 LLM-powered extraction (main script)
-│   ├── holiday_contacts.py      # Regex fallback (no API needed)
+│   ├── intelligent_contacts.py  # 🧠 LLM-powered extraction
+│   ├── deduplicate_contacts.py  # 🔗 Entity resolution & cleanup
+│   ├── holiday_contacts.py      # (Deprecated) Regex fallback
 │   └── common.py                # Shared utilities
 ├── docs/
-│   └── data_format.md           # Claude export format reference
-└── examples/
-    └── sample_output.txt        # What results look like
+│   ├── data_format.md           # Claude export format reference
+│   └── adr/                     # Architecture Decision Records
+└── work/                        # Session notes (gitignored)
 ```
 
 ## 💡 How It Works

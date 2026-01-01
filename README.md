@@ -6,6 +6,16 @@
 
 > **This is NOT regex matching.** Uses LLMs to **intelligently understand** relationships, context, and importance - just like a human assistant reading your conversations.
 
+## ⚡ TL;DR - New Year Contacts in 5 Minutes
+
+1. **Export:** [claude.ai](https://claude.ai) → Settings → Privacy → Export data
+2. **Install:** `pip install google-genai rapidfuzz`
+3. **Extract:** `python scripts/intelligent_contacts.py your_export.json --limit 10`
+4. **Clean:** `python scripts/deduplicate_contacts.py contacts.json --auto-merge 0.95`
+5. **Review:** Open `contacts.txt` → prioritized list for New Year greetings!
+
+**Cost:** ~$5 for 740 conversations (Gemini 3 Flash)
+
 ## 🎯 Use Cases
 
 | Script | Purpose | Method |

@@ -37,6 +37,8 @@ Contact extraction is a **needle-in-haystack** problem - finding names, relation
 | Claude Opus | 45 | ~5 min | ~$6.00 | **~$444** |
 | **Gemini 3 Flash** | **58** | **74 sec** | **~$0.10** | **~$7.40** |
 
+> **Note:** Costs are estimates based on API pricing. Actual cost for 740 conversations was **$4.45** - lower due to pre-filtering (conversations without contact mentions) and actual token consumption. See [ROADMAP.md](ROADMAP.md) for real-world results.
+
 ### Key Findings
 
 - **Gemini 3 Flash found 29% more contacts than Opus** (58 vs 45)
